@@ -18,6 +18,7 @@ class ImageDataset(Dataset):
     def __getitem__(self, idx):
         image = self.df.iloc[idx]["image"]
         label = self.df.iloc[idx]["label"]
+        print(type(image), image.shape)
         if self.transform:
             image = self.transform(image)
         return image, label
