@@ -8,18 +8,20 @@ class ImageDataset(Dataset):
     def __init__(self, dataframe: pd.DataFrame, transform: Optional[Any] = None):
         self.df = dataframe
         self.transform = transform or transforms.Compose([
+            transforms.ToTensor(),
             transforms.RandomHorizontalFlip(),
             transforms.RandomRotation(15),
-            transforms.ToTensor(),
         ])
 
     def __len__(self): return len(self.df)
 
     def __getitem__(self, idx):
-        image = torch.tensor(self.df.iloc[idx]["image"], dtype=torch.float32)
+        image = self.df.iloc[idx]["image"]
         label = self.df.iloc[idx]["label"]
-        return self.transform(image), label
-
+        if self.transform:
+            image = self.transform(image)
+        return image, label
+    
 def create_data_loader(df: pd.DataFrame, config: Dict[str, Any]) -> DataLoader:
     return DataLoader(
         ImageDataset(df, config.get("transform")),
