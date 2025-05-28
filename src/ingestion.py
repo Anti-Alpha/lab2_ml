@@ -4,72 +4,59 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 import pandas as pd
 
-
-def train_test_split(
-    df: pd.DataFrame,
-    test_size: Union[float, int] = 0.25,
-    random_state: Union[int, None] = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def train_test_split(data: pd.DataFrame, test_size: Union[float, int] = 0.25, random_state: Union[int, None] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     if random_state is not None:
         np.random.seed(random_state)
+    n = len(data)
+    if isinstance(test_size, float):
+        test_size = int(n * test_size)
+    idx = np.random.permutation(n)
+    return data.iloc[idx[test_size:]], data.iloc[idx[:test_size]]
 
-    total = len(df)
-    n = int(total * test_size) if isinstance(test_size, float) else test_size
-
-    idx = np.random.permutation(total)
-    return df.iloc[idx[n:]], df.iloc[idx[:n]]
-
-
-def unpickle(path):
-    with open(path, "rb") as f:
+def unpickle(file):
+    with open(file, "rb") as f:
         return pickle.load(f, encoding="bytes")
 
+def assign_batches(df: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
+    df_ = df.copy(deep=True)
+    df_["batch_name"] = "not_set"
+    n = cfg["n_batches"]
+    s = len(df_) // n
+    i = 0
+    for b in range(n):
+        loc = df_.columns.get_loc("batch_name")
+        if isinstance(loc, int):
+            if b == n - 1:
+                df_.iloc[i:, loc] = str(b)
+            else:
+                df_.iloc[i:i+s, loc] = str(b)
+        else:
+            raise TypeError("Expected one 'batch_name' column")
+        i += s
+    return df_
 
-def add_batches(df: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
-    out = df.copy()
-    out["batch_name"] = "unset"
-    num = cfg["n_batches"]
-    size = len(out) // num
-    col = out.columns.get_loc("batch_name")
+def select_batches(df: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
+    return df[df["batch_name"].isin(cfg["batch_names_select"])].copy(deep=True)
 
-    for i in range(num):
-        end = None if i == num - 1 else size * (i + 1)
-        out.iloc[i * size:end, col] = str(i)
-
-    return out
-
-
-def filter_batches(df: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
-    return df[df["batch_name"].isin(cfg["batch_names_select"])].copy()
-
-
-def process_data(dir_path: str, cfg: Dict[str, Any]) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    parts = [f"{dir_path}/cifar-10-batches-py/data_batch_{i}" for i in range(1, 6)]
-    test_file = f"{dir_path}/cifar-10-batches-py/test_batch"
-
-    X, y = [], []
-    for file in parts:
-        data = unpickle(file)
-        X.append(data[b"data"])
-        y += data[b"labels"]
-
-    X_train = np.vstack(X).reshape(-1, 3, 32, 32).astype("float32") / 255.0
-    y_train = np.array(y)
-
-    test = unpickle(test_file)
-    X_test = test[b"data"].reshape(-1, 3, 32, 32).astype("float32") / 255.0
-    y_test = np.array(test[b"labels"])
-
-    df_train = pd.DataFrame({"image": list(X_train), "label": y_train})
-    df_test = pd.DataFrame({"image": list(X_test), "label": y_test})
-
-    df_train = add_batches(df_train, cfg)
-    logging.info(f"Batches created: {cfg['n_batches']}")
-
-    df_train = filter_batches(df_train, cfg)
-    logging.info(f"Selected batches: {cfg['batch_names_select']}")
-
+def process_data(dir: str, cfg: Dict[str, Any]) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    batches = [f"{dir}/cifar-10-batches-py/data_batch_{i}" for i in range(1, 6)]
+    test_path = f"{dir}/cifar-10-batches-py/test_batch"
+    data, labels = [], []
+    for b in batches:
+        d = unpickle(b)
+        data.append(d[b"data"])
+        labels.extend(d[b"labels"])
+    x = np.vstack(data).reshape(-1, 3, 32, 32).astype("float32") / 255.0
+    y = np.array(labels)
+    test_d = unpickle(test_path)
+    xt = test_d[b"data"].reshape(-1, 3, 32, 32).astype("float32") / 255.0
+    yt = np.array(test_d[b"labels"])
+    df_train = pd.DataFrame({"image": list(x), "label": y})
+    df_test = pd.DataFrame({"image": list(xt), "label": yt})
+    df_train = assign_batches(df_train, cfg)
+    logging.info(f"Split train dataset in {cfg['n_batches']} batches")
+    df_train = select_batches(df_train, cfg)
+    logging.info(f"Batches {cfg['batch_names_select']} selected from train dataset")
     df_train, df_val = train_test_split(df_train, test_size=cfg.get("val_size", 0.2), random_state=cfg.get("random_state", 42))
-    logging.info(f"Split sizes - train: {len(df_train)}, val: {len(df_val)}, test: {len(df_test)}")
-
+    logging.info(f"Prepared 3 data splits: train, size: {len(df_train)}, val: {len(df_val)}, test: {len(df_test)}")
     return df_train, df_val, df_test

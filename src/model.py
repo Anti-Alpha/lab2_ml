@@ -1,27 +1,30 @@
 import torch
 import torch.nn as nn
-from torchvision import models
+import torchvision.models as models
 
 
 class SimpleNN(nn.Module):
-    def __init__(self, num_classes: int):
-        super().__init__()
-        self.layer1 = nn.Linear(32 * 32 * 3, 128)
-        self.layer2 = nn.Linear(128, num_classes)
+    def __init__(self, n_classes: int) -> None:
+        super(SimpleNN, self).__init__()
+        self.fc1 = nn.Linear(32 * 32 * 3, 128)
+        self.fc2 = nn.Linear(128, n_classes)
 
-    def forward(self, x):
-        x = x.view(x.size(0), -1)
-        x = torch.relu(self.layer1(x))
-        return self.layer2(x)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = torch.flatten(x, 1)
+        x = torch.relu(self.fc1(x))
+        x = self.fc2(x)
+        return x
 
 
 class EfficientNetV2(nn.Module):
-    def __init__(self, num_classes: int):
-        super().__init__()
-        net = models.efficientnet_v2_s()
-        f = net.classifier[1].in_features
-        net.classifier[1] = nn.Linear(f, num_classes)
-        self.backbone = net
+    def __init__(self, n_classes: int):
+        super(EfficientNetV2, self).__init__()
+        self.efficientnet = models.efficientnet_v2_s()
+        in_features = self.efficientnet.classifier[1].in_features
+        if isinstance(in_features, int):
+            self.efficientnet.classifier[1] = nn.Linear(in_features, n_classes)
+        else:
+            raise TypeError(f"Expected in_features to be an int, but got {type(in_features)}")
 
     def forward(self, x):
-        return self.backbone(x)
+        return self.efficientnet(x)
