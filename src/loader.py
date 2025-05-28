@@ -21,7 +21,6 @@ class ImageDataset(Dataset):
     def __getitem__(self, idx):
         image = torch.tensor(self.df.iloc[idx]["image"], dtype=torch.float32)
         label = self.df.iloc[idx]["label"]
-        logging.info(f"Image type after transform: {type(image)}")
         if self.transform:
             image = self.transform(image)
         return image, label
