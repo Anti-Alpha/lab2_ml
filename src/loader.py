@@ -3,6 +3,8 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+import logging
+logging.basicConfig(level=logging.INFO)
 
 class ImageDataset(Dataset):
     def __init__(self, dataframe: pd.DataFrame, transform: Optional[Any] = None):
@@ -19,6 +21,7 @@ class ImageDataset(Dataset):
     def __getitem__(self, idx):
         image = torch.tensor(self.df.iloc[idx]["image"], dtype=torch.float32)
         label = self.df.iloc[idx]["label"]
+        logging.info(f"Image type after transform: {type(image)}")
         if self.transform:
             image = self.transform(image)
         return image, label
