@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from metrics import evaluate_metrics
-
+from typing import Tuple
 
 def test_model(
     model: nn.Module,
